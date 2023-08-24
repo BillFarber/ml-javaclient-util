@@ -22,8 +22,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Non-threadsafe implementation that implements FileVisitor as a way of descending one or more file paths.
@@ -38,6 +37,8 @@ public class DefaultDocumentFileReader extends AbstractDocumentFileReader implem
 	// Each of these are eagerly instantiated, and we retain a reference in case a client wants to modify them
 	private CollectionsFileDocumentFileProcessor collectionsFileDocumentFileProcessor;
 	private PermissionsFileDocumentFileProcessor permissionsFileDocumentFileProcessor;
+	final private Stack<Properties> collectionsPropertiesStack = new Stack<>();
+	final private Stack<Properties> permissionsPropertiesStack = new Stack<>();
 
 	/**
 	 * Calls initialize to instantiate some default DocumentFileProcessor objects.
@@ -98,6 +99,20 @@ public class DefaultDocumentFileReader extends AbstractDocumentFileReader implem
 		return f.exists() ? Paths.get(f.getAbsolutePath()) : null;
 	}
 
+	private void loadDirectoryProperties(Path dir, PropertiesDrivenDocumentFileProcessor processor, Stack<Properties> propertiesStack) throws IOException {
+		File collectionsPropertiesFile = new File(dir.toFile(), processor.getPropertiesFilename());
+		if (collectionsPropertiesFile.exists()) {
+			processor.loadProperties(collectionsPropertiesFile);
+		} else {
+			if (!propertiesStack.isEmpty()) {
+				processor.setProperties(propertiesStack.peek());
+			} else {
+				processor.setProperties(new Properties());
+			}
+		}
+		propertiesStack.push(processor.getProperties());
+	}
+
 	@Override
 	public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
 		boolean accept = acceptPath(dir, attrs);
@@ -105,6 +120,10 @@ public class DefaultDocumentFileReader extends AbstractDocumentFileReader implem
 			if (logger.isDebugEnabled()) {
 				logger.debug("Visiting directory: " + dir);
 			}
+
+			loadDirectoryProperties(dir, collectionsFileDocumentFileProcessor, collectionsPropertiesStack);
+			loadDirectoryProperties(dir, permissionsFileDocumentFileProcessor, permissionsPropertiesStack);
+
 			return FileVisitResult.CONTINUE;
 		} else {
 			if (logger.isDebugEnabled()) {
@@ -127,6 +146,8 @@ public class DefaultDocumentFileReader extends AbstractDocumentFileReader implem
 		if (exc != null) {
 			logger.warn("Error in postVisitDirectory: " + exc.getMessage(), exc);
 		}
+		collectionsFileDocumentFileProcessor.setProperties(collectionsPropertiesStack.pop());
+		permissionsFileDocumentFileProcessor.setProperties(permissionsPropertiesStack.pop());
 		return FileVisitResult.CONTINUE;
 	}
 
