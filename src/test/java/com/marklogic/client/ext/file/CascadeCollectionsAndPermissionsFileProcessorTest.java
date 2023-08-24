@@ -24,7 +24,10 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CascadeCollectionsAndPermissionsFileProcessorTest extends AbstractIntegrationTest {
 
@@ -104,5 +107,22 @@ public class CascadeCollectionsAndPermissionsFileProcessorTest extends AbstractI
 		assertTrue(testFile.getDocumentMetadata().getCollections().contains(PARENT_COLLECTION));
 		assertTrue(testFile.getDocumentMetadata().getPermissions().get("rest-reader").contains(DocumentMetadataHandle.Capability.READ));
 		assertNull(testFile.getDocumentMetadata().getPermissions().get("rest-writer"));
+	}
+
+	@Test
+	void parentWithTwoKids() {
+		String directory = "src/test/resources/process-files/cascading-metadata-test/parent-two-kids";
+		GenericFileLoader loader = new GenericFileLoader(client);
+		List<DocumentFile> files = loader.loadFiles(directory);
+		assertEquals(3, files.size());
+
+		verifyCollections("/child1/child1.json", "parent");
+		verifyPermissions("/child1/child1.json", "qconsole-user", "read");
+
+		verifyCollections("/child2/child2.json", "child2");
+		verifyPermissions("/child2/child2.json", "app-user", "read");
+
+		verifyCollections("/parent.json", "parent");
+		verifyPermissions("/parent.json", "qconsole-user", "read");
 	}
 }
